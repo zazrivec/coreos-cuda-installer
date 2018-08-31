@@ -1,0 +1,29 @@
+dist: trusty
+sudo: required
+
+env:
+  global:
+    - IMAGE=coreos-cuda-installer
+  matrix:
+    - COREOS_TRACK=stable OS_VERSION=1235.9.0 CUDA_VERSION=8.0.61
+
+before_script:
+  - curl https://${COREOS_TRACK}.release.core-os.net/amd64-usr/${OS_VERSION}/version.txt -o version.txt
+  - cat version.txt
+  - export $(cat version.txt | xargs)
+  - if [ "$TRAVIS_EVENT_TYPE" != "push" ]; then
+      curl -s https://hub.docker.com/v2/repositories/${DOCKER_USERNAME}/${IMAGE}/tags/?page_size=10000 | 
+      jq -e "[.results | .[] | .name == \"${COREOS_VERSION}-${CUDA_VERSION}\"] | any | not" || 
+      travis_terminate 0;
+    fi
+
+script:
+  - docker build 
+    --build-arg CUDA_VERSION=${CUDA_VERSION} 
+    --build-arg COREOS_VERSION=${COREOS_VERSION} 
+    --tag ${DOCKER_USERNAME}/${IMAGE}:${COREOS_VERSION}-${CUDA_VERSION}
+    .
+
+after_success:
+  - docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
+  - docker push ${DOCKER_USERNAME}/${IMAGE}:${COREOS_VERSION}-${CUDA_VERSION}
